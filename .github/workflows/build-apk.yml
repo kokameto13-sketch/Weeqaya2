@@ -3,8 +3,7 @@ name: Build Weeqaya APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: ["main"]
 
 jobs:
   build:
@@ -14,30 +13,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check ZIP
+      - name: Show repository files
         run: |
           echo "===== REPOSITORY FILES ====="
-          ls -lah
-          echo "===== ZIP FILE ====="
-          ls -lh Weeqaya_Supabase_v4_Core.zip
+          ls -la
 
       - name: Extract project ZIP
         run: |
           rm -rf extracted
-          mkdir -p extracted
+          mkdir extracted
 
-          unzip -q Weeqaya_Supabase_v4_Core.zip -d extracted
+          echo "===== ZIP FILE ====="
+          ls -lh Weeqaya_Supabase_v4.1_Core_FIXED.zip
+
+          unzip -q Weeqaya_Supabase_v4.1_Core_FIXED.zip -d extracted
 
           echo "===== EXTRACTED FILES ====="
-          find extracted -maxdepth 5 -type f | head -200
+          find extracted -maxdepth 4 -type f | head -100
 
       - name: Find Android project
-        shell: bash
         run: |
           PROJECT_DIR=$(dirname "$(find extracted -type f -name settings.gradle.kts -print -quit)")
 
           if [ -z "$PROJECT_DIR" ] || [ "$PROJECT_DIR" = "." ]; then
-            echo "ERROR: Android project was not found."
+            echo "ERROR: Android project not found"
             exit 1
           fi
 
@@ -57,35 +56,49 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Verify Java and Gradle
-        run: |
-          echo "===== JAVA ====="
-          java -version
-
-          echo "===== GRADLE ====="
-          gradle --version
-
       - name: Verify Android project
         run: |
           cd "$PROJECT_DIR"
 
-          echo "===== PROJECT ROOT ====="
+          echo "===== PROJECT DIRECTORY ====="
           pwd
-          ls -lah
+
+          echo "===== PROJECT FILES ====="
+          ls -la
 
           echo "===== APP DIRECTORY ====="
-          ls -lah app
+          ls -la app
 
-          echo "===== GRADLE FILES ====="
-          find . -maxdepth 3 -type f \
-            -name "*.gradle" -o -name "*.gradle.kts" -o -name "gradle.properties" \
-            -print
+          echo "===== JAVA VERSION ====="
+          java -version
+
+          echo "===== GRADLE VERSION ====="
+          gradle --version
 
       - name: Build Debug APK
-        shell: bash
         run: |
           cd "$PROJECT_DIR"
 
           echo "===== STARTING BUILD ====="
 
-          set +
+          gradle :app:assembleDebug \
+            --stacktrace \
+            --info \
+            --console=plain
+
+      - name: Find APK
+        if: always()
+        run: |
+          echo "===== APK SEARCH ====="
+
+          find "$PROJECT_DIR/app/build" \
+            -type f \
+            -name "*.apk" \
+            -print 2>/dev/null || true
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weeqaya-debug-apk
+          path: "${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk"
